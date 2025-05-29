@@ -1,0 +1,12 @@
+git rm -r backend/
+git rm test-*.html
+git rm *.py
+git rm *.sh
+git add start.sh
+git rm *.md
+git add README.md QUICKSTART.md LICENSE
+git rm *.txt *.bat *.patch
+git rm -r testing/ temp/
+cd backend-node && git rm test-*.js test-*.sh debug-*.js check-*.js server-*.js *.backup *.sh *.html && cd ..
+git commit -m "Clean repository"
+git push
