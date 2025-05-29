@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ElevenLabs API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            background: #9b59b6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #8e44ad;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+        .warning {
+            color: orange;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .voice-card {
+            padding: 15px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .voice-card:hover {
+            background: #f9f9f9;
+        }
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>ElevenLabs Voice API Test</h1>
+    
+    <div class="test-section">
+        <h2>1. Backend Status</h2>
+        <button onclick="checkBackend()">Check Backend</button>
+        <div id="backend-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. List Available Voices</h2>
+        <button onclick="listVoices()">Get Voices</button>
+        <div id="voices-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Generate Test Voiceover</h2>
+        <p>Select a voice from above first, then generate a test voiceover</p>
+        <textarea id="test-text" rows="4" style="width: 100%; margin: 10px 0;">
+Welcome to Ad Maker Wizard. This is a test of the ElevenLabs voice generation system. If you can hear this, the integration is working perfectly!
+        </textarea>
+        <br>
+        <button onclick="generateVoiceover()">Generate Voiceover</button>
+        <div id="voiceover-result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api';
+        let selectedVoice = null;
+        
+        async function checkBackend() {
+            const resultDiv = document.getElementById('backend-result');
+            resultDiv.innerHTML = 'Checking...';
+            
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+                
+                // Check ElevenLabs status
+                if (data.services && data.services.elevenlabs) {
+                    if (data.services.elevenlabs === 'configured') {
+                        resultDiv.innerHTML += '<p class="success">✅ ElevenLabs API key is configured</p>';
+                    } else {
+                        resultDiv.innerHTML += '<p class="error">❌ ElevenLabs API key is missing</p>';
+                    }
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: Backend not running or not accessible</p>`;
+                resultDiv.innerHTML += `<p>Make sure to run: ./start-app.sh</p>`;
+            }
+        }
+        
+        async function listVoices() {
+            const resultDiv = document.getElementById('voices-result');
+            resultDiv.innerHTML = 'Loading voices...';
+            
+            try {
+                const response = await fetch(`${API_URL}/voices`);
+                const data = await response.json();
+                
+                if (data.warning) {
+                    resultDiv.innerHTML = `<p class="warning">⚠️ ${data.warning}</p>`;
+                }
+                
+                if (data.voices && data.voices.length > 0) {
+                    resultDiv.innerHTML = '<h3>Available Voices:</h3>';
+                    
+                    // Check if these are mock voices
+                    const isMock = data.voices.some(v => v.id === 'voice1' || v.id === 'voice2');
+                    if (isMock) {
+                        resultDiv.innerHTML += '<p class="warning">⚠️ These are mock voices. Check ElevenLabs API configuration.</p>';
+                    } else {
+                        resultDiv.innerHTML += '<p class="success">✅ Real ElevenLabs voices loaded!</p>';
+                    }
+                    
+                    data.voices.forEach(voice => {
+                        const voiceDiv = document.createElement('div');
+                        voiceDiv.className = 'voice-card';
+                        voiceDiv.innerHTML = `
+                            <strong>${voice.name}</strong><br>
+                            <small>${voice.description}</small><br>
+                            <small>ID: ${voice.id}</small>
+                        `;
+                        voiceDiv.onclick = () => {
+                            selectedVoice = voice;
+                            document.querySelectorAll('.voice-card').forEach(card => {
+                                card.style.background = '';
+                            });
+                            voiceDiv.style.background = '#e8e8ff';
+                            resultDiv.innerHTML += `<p class="success">Selected voice: ${voice.name}</p>`;
+                        };
+                        resultDiv.appendChild(voiceDiv);
+                    });
+                    
+                    // Select first voice by default
+                    if (!selectedVoice && data.voices.length > 0) {
+                        selectedVoice = data.voices[0];
+                        resultDiv.innerHTML += `<p>Auto-selected first voice: ${selectedVoice.name}</p>`;
+                    }
+                } else {
+                    resultDiv.innerHTML = '<p class="error">No voices returned from API</p>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function generateVoiceover() {
+            const resultDiv = document.getElementById('voiceover-result');
+            const text = document.getElementById('test-text').value;
+            
+            if (!selectedVoice) {
+                resultDiv.innerHTML = '<p class="error">Please select a voice first!</p>';
+                return;
+            }
+            
+            if (!text.trim()) {
+                resultDiv.innerHTML = '<p class="error">Please enter some text!</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = 'Generating voiceover...';
+            
+            try {
+                const response = await fetch(`${API_URL}/generate-voiceover`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voiceId: selectedVoice.id,
+                        voiceName: selectedVoice.name
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = '<h3>Voiceover Generated!</h3>';
+                    resultDiv.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    
+                    if (data.warning) {
+                        resultDiv.innerHTML += `<p class="warning">⚠️ ${data.warning}</p>`;
+                    }
+                    
+                    if (data.audioUrl) {
+                        const isMock = data.audioUrl.includes('mock');
+                        if (isMock) {
+                            resultDiv.innerHTML += '<p class="warning">⚠️ This is a mock audio file</p>';
+                        } else {
+                            resultDiv.innerHTML += '<p class="success">✅ Real voiceover generated with ElevenLabs!</p>';
+                        }
+                        
+                        resultDiv.innerHTML += `
+                            <p>Play the generated audio:</p>
+                            <audio controls src="${data.audioUrl}"></audio>
+                        `;
+                        
+                        if (data.fileSize) {
+                            resultDiv.innerHTML += `<p>File size: ${data.fileSize}</p>`;
+                        }
+                        if (data.duration) {
+                            resultDiv.innerHTML += `<p>Duration: ${data.duration} seconds</p>`;
+                        }
+                    }
+                } else {
+                    resultDiv.innerHTML = `<p class="error">Error ${response.status}: ${data.error || 'Failed to generate voiceover'}</p>`;
+                    if (data.suggestion) {
+                        resultDiv.innerHTML += `<p>Suggestion: ${data.suggestion}</p>`;
+                    }
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Auto-check backend on load
+        window.onload = () => {
+            checkBackend();
+        };
+    </script>
+</body>
+</html>

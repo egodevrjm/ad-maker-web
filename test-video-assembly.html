@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Assembly Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .status-box {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status-box.success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .status-box.error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .status-box.warning { background: #fff3cd; border: 1px solid #ffeeba; }
+    </style>
+</head>
+<body>
+    <h1>🎬 Video Assembly Diagnostic</h1>
+    
+    <div class="test-section">
+        <h2>System Check</h2>
+        <button onclick="checkSystem()">Run System Check</button>
+        <div id="system-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Video Stitching</h2>
+        <p>This tests combining videos with sound effects</p>
+        <button onclick="testStitching()">Test Stitching</button>
+        <div id="stitch-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Final Video Creation</h2>
+        <p>This tests creating the final 30-second video</p>
+        <button onclick="testFinalVideo()">Test Final Video</button>
+        <div id="final-result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        
+        async function checkSystem() {
+            const resultDiv = document.getElementById('system-result');
+            resultDiv.innerHTML = '<p>Checking system...</p>';
+            
+            try {
+                // Check health
+                const healthResponse = await fetch(`${API_URL}/health`);
+                const health = await healthResponse.json();
+                
+                let html = '<h3>API Status:</h3>';
+                html += '<div class="status-box ' + (health.status === 'healthy' ? 'success' : 'error') + '">';
+                html += `<strong>Server:</strong> ${health.status}<br>`;
+                
+                // Check each service
+                for (const [service, status] of Object.entries(health.services)) {
+                    const isConfigured = status === 'configured' || status === 'running';
+                    html += `<strong>${service}:</strong> <span class="${isConfigured ? 'success' : 'error'}">${status}</span><br>`;
+                }
+                html += '</div>';
+                
+                // Check FFmpeg specifically
+                html += '<h3>FFmpeg Check:</h3>';
+                html += '<div id="ffmpeg-check">Checking...</div>';
+                
+                resultDiv.innerHTML = html;
+                
+                // Do a specific FFmpeg test
+                setTimeout(() => checkFFmpeg(), 100);
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function checkFFmpeg() {
+            const ffmpegDiv = document.getElementById('ffmpeg-check');
+            
+            // Test by trying to stitch with empty data
+            try {
+                const response = await fetch(`${API_URL}/api/stitch-videos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videos: [], soundEffects: [] })
+                });
+                
+                const data = await response.json();
+                
+                if (data.warning && data.warning.includes('FFmpeg not installed')) {
+                    ffmpegDiv.innerHTML = '<div class="status-box error">❌ FFmpeg not detected by Node.js<br><small>This is why video assembly fails</small></div>';
+                } else {
+                    ffmpegDiv.innerHTML = '<div class="status-box success">✅ FFmpeg is accessible</div>';
+                }
+            } catch (error) {
+                ffmpegDiv.innerHTML = '<div class="status-box error">Could not test FFmpeg</div>';
+            }
+        }
+        
+        async function testStitching() {
+            const resultDiv = document.getElementById('stitch-result');
+            resultDiv.innerHTML = '<p>Testing video stitching...</p>';
+            
+            try {
+                const mockData = {
+                    videos: [
+                        { sceneNumber: 1, videoUrl: '/api/mock-video/1.mp4' },
+                        { sceneNumber: 2, videoUrl: '/api/mock-video/2.mp4' }
+                    ],
+                    soundEffects: [
+                        { selectedSfx: { url: '/api/mock-sfx/1-1.mp3' } },
+                        { selectedSfx: { url: '/api/mock-sfx/2-1.mp3' } }
+                    ]
+                };
+                
+                const response = await fetch(`${API_URL}/api/stitch-videos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(mockData)
+                });
+                
+                const data = await response.json();
+                
+                let html = '<h3>Stitching Result:</h3>';
+                
+                if (data.warning) {
+                    html += `<div class="status-box warning">⚠️ ${data.warning}</div>`;
+                }
+                
+                if (data.stitchedVideos && data.stitchedVideos.length > 0) {
+                    html += '<div class="status-box success">✅ Stitching endpoint is working</div>';
+                    html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                } else if (data.error) {
+                    html += `<div class="status-box error">❌ Error: ${data.error}</div>`;
+                }
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function testFinalVideo() {
+            const resultDiv = document.getElementById('final-result');
+            resultDiv.innerHTML = '<p>Testing final video creation...</p>';
+            
+            try {
+                const mockData = {
+                    stitchedVideos: [
+                        { sceneNumber: 1, combinedUrl: '/api/mock-video/1.mp4' },
+                        { sceneNumber: 2, combinedUrl: '/api/mock-video/2.mp4' }
+                    ],
+                    voiceoverUrl: '/api/mock-voiceover/test.mp3',
+                    productName: 'Test Product'
+                };
+                
+                const response = await fetch(`${API_URL}/api/create-final-video`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(mockData)
+                });
+                
+                const data = await response.json();
+                
+                let html = '<h3>Final Video Result:</h3>';
+                
+                if (data.warning) {
+                    html += `<div class="status-box warning">⚠️ ${data.warning}</div>`;
+                    html += '<p>This means FFmpeg is not accessible from Node.js</p>';
+                }
+                
+                if (data.finalVideoUrl) {
+                    const isMock = data.finalVideoUrl.includes('/api/final/commercial.mp4');
+                    if (isMock) {
+                        html += '<div class="status-box warning">⚠️ Using placeholder video</div>';
+                    } else {
+                        html += '<div class="status-box success">✅ Real video created!</div>';
+                    }
+                    html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                }
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Auto-check on load
+        window.onload = () => {
+            checkSystem();
+        };
+    </script>
+</body>
+</html>

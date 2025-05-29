@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Stitching Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        video {
+            max-width: 100%;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Video Stitching Test</h1>
+    
+    <div class="test-section">
+        <h2>1. Check Backend Health</h2>
+        <button onclick="checkHealth()">Check Health</button>
+        <div id="health-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. Test Video Stitching</h2>
+        <p>This will create mock videos and test the stitching process</p>
+        <button onclick="testStitching()">Test Stitching</button>
+        <div id="stitch-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Test Final Video Creation</h2>
+        <p>This will test creating a final video with voiceover</p>
+        <button onclick="testFinalVideo()">Test Final Video</button>
+        <div id="final-result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api';
+        
+        async function checkHealth() {
+            const resultDiv = document.getElementById('health-result');
+            resultDiv.innerHTML = 'Checking...';
+            
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+                
+                // Check if ffmpeg is mentioned
+                if (JSON.stringify(data).includes('ffmpeg')) {
+                    resultDiv.innerHTML += '<p class="success">✅ FFmpeg status is being reported</p>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function testStitching() {
+            const resultDiv = document.getElementById('stitch-result');
+            resultDiv.innerHTML = 'Testing video stitching...';
+            
+            try {
+                // Create mock data for stitching
+                const mockVideos = [
+                    { sceneNumber: 1, videoUrl: '/api/mock-video/1.mp4' },
+                    { sceneNumber: 2, videoUrl: '/api/mock-video/2.mp4' },
+                    { sceneNumber: 3, videoUrl: '/api/mock-video/3.mp4' },
+                    { sceneNumber: 4, videoUrl: '/api/mock-video/4.mp4' }
+                ];
+                
+                const mockSoundEffects = [
+                    { selectedSfx: { url: '/api/mock-sfx/1-1.mp3' } },
+                    { selectedSfx: { url: '/api/mock-sfx/2-1.mp3' } },
+                    { selectedSfx: { url: '/api/mock-sfx/3-1.mp3' } },
+                    { selectedSfx: { url: '/api/mock-sfx/4-1.mp3' } }
+                ];
+                
+                const response = await fetch(`${API_URL}/stitch-videos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        videos: mockVideos,
+                        soundEffects: mockSoundEffects
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.stitchedVideos) {
+                    resultDiv.innerHTML = '<h3 class="success">✅ Stitching endpoint working!</h3>';
+                    resultDiv.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    
+                    // Check for warnings
+                    if (data.warning) {
+                        resultDiv.innerHTML += `<p class="error">⚠️ Warning: ${data.warning}</p>`;
+                    }
+                    
+                    // Try to load one of the stitched videos
+                    if (data.stitchedVideos[0]?.combinedUrl) {
+                        resultDiv.innerHTML += `<p>Testing video playback:</p>`;
+                        resultDiv.innerHTML += `<video controls src="${data.stitchedVideos[0].combinedUrl}"></video>`;
+                    }
+                } else {
+                    resultDiv.innerHTML = `<p class="error">Error: No stitched videos returned</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function testFinalVideo() {
+            const resultDiv = document.getElementById('final-result');
+            resultDiv.innerHTML = 'Testing final video creation...';
+            
+            try {
+                // Create mock stitched videos
+                const mockStitchedVideos = [
+                    { sceneNumber: 1, combinedUrl: '/api/mock-video/1.mp4' },
+                    { sceneNumber: 2, combinedUrl: '/api/mock-video/2.mp4' },
+                    { sceneNumber: 3, combinedUrl: '/api/mock-video/3.mp4' },
+                    { sceneNumber: 4, combinedUrl: '/api/mock-video/4.mp4' }
+                ];
+                
+                const response = await fetch(`${API_URL}/create-final-video`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        stitchedVideos: mockStitchedVideos,
+                        voiceoverUrl: '/api/mock-voiceover/test.mp3',
+                        productName: 'Test Product'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.finalVideoUrl) {
+                    resultDiv.innerHTML = '<h3 class="success">✅ Final video endpoint working!</h3>';
+                    resultDiv.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    
+                    // Check for warnings
+                    if (data.warning) {
+                        resultDiv.innerHTML += `<p class="error">⚠️ Warning: ${data.warning}</p>`;
+                        resultDiv.innerHTML += '<p>This means FFmpeg is not properly detected. Videos will use placeholders.</p>';
+                    } else {
+                        resultDiv.innerHTML += '<p class="success">✅ FFmpeg is working! Videos should be properly stitched.</p>';
+                    }
+                    
+                    // Show the video
+                    resultDiv.innerHTML += `<p>Final video:</p>`;
+                    resultDiv.innerHTML += `<video controls src="${data.finalVideoUrl}"></video>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Auto-check health on load
+        window.onload = () => {
+            checkHealth();
+        };
+    </script>
+</body>
+</html>
